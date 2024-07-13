@@ -29,7 +29,7 @@ __alltraps:
     call trap_handler 
 
 __restore:
-    mv sp,a0 //第 10 行比较奇怪我们暂且不管，假设它从未发生，那么 sp 仍然指向内核栈的栈顶
+    mv sp,a0 //这里的sp指向的不是上个程序的trapcontext，而是调用栈信息，因此运行新程序需要更新
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     ld t2, 2*8(sp)
