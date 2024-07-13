@@ -4,13 +4,14 @@
 
 #[macro_use]
 mod console;
-pub mod batch;
+mod config;
+mod loader;
 mod lang_items;
 mod sbi;
 mod sync;
 pub mod syscall;
 pub mod trap;
-
+pub mod task;
 use core::arch::global_asm;
 
 global_asm!(include_str!("entry.asm"));
@@ -21,8 +22,9 @@ pub fn rust_main() -> ! {
     clear_bss();
     println!("Helo World");
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    loader::load_apps();
+    task::run_first_task();
+    panic!("Unreachable in rust_main!");
 }
 
 fn clear_bss(){
@@ -30,8 +32,8 @@ fn clear_bss(){
         fn sbss();
         fn ebss();
     }   
-    (sbss as usize..ebss as usize).for_each(|a|{
-        unsafe { (a as *mut u8).write_volatile(0) }
-    });
-
+    unsafe{
+        core::slice::from_raw_parts_mut(sbss as usize as *mut u8 , ebss as usize - sbss as usize)
+            .fill(0);
+    }
 }

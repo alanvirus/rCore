@@ -32,7 +32,7 @@ fn clear_bss() {
     });
 }
 
-//更名为linux接口
+//接口更名，更像linux
 use syscall::*;
 
 pub fn write(fd: usize, buf: &[u8]) -> isize {
@@ -40,4 +40,7 @@ pub fn write(fd: usize, buf: &[u8]) -> isize {
 }
 pub fn exit(exit_code: i32) -> isize {
     sys_exit(exit_code)
+}
+pub fn yield_() -> isize {
+    sys_yield()
 }

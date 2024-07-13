@@ -29,7 +29,6 @@ __alltraps:
     call trap_handler 
 
 __restore:
-    mv sp,a0 //第 10 行比较奇怪我们暂且不管，假设它从未发生，那么 sp 仍然指向内核栈的栈顶
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     ld t2, 2*8(sp)
@@ -44,5 +43,5 @@ __restore:
         .set n, n+1
     .endr
     addi sp, sp, 34*8
-    csrrw sp, sscratch, sp
+    csrrw sp, sscratch, sp//sscratch存储当前task的内核栈指针
     sret
