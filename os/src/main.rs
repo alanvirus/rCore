@@ -2,16 +2,21 @@
 #![no_main]
 // #![feature(panic_info_message)]
 
+#[path = "boards/qemu.rs"]
+mod board;
+
 #[macro_use]
 mod console;
 mod config;
-mod loader;
 mod lang_items;
+mod loader;
 mod sbi;
 mod sync;
 pub mod syscall;
-pub mod trap;
 pub mod task;
+mod timer;
+pub mod trap;
+
 use core::arch::global_asm;
 
 global_asm!(include_str!("entry.asm"));
@@ -23,6 +28,8 @@ pub fn rust_main() -> ! {
     println!("Helo World");
     trap::init();
     loader::load_apps();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
     task::run_first_task();
     panic!("Unreachable in rust_main!");
 }

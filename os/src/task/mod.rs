@@ -22,6 +22,7 @@ use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
+use crate::timer::get_time_ms;
 
 pub use context::TaskContext;
 
@@ -85,6 +86,7 @@ impl TaskManager {
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
+        println!("s {}", get_time_ms() as isize);
         // before this, we should drop local variables that must be dropped manually
         unsafe {
             __switch(&mut _unused as *mut TaskContext, next_task_cx_ptr);
@@ -112,6 +114,7 @@ impl TaskManager {
     fn find_next_task(&self) -> Option<usize> {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        // println!("find_next_self.num= {}",self.num_app);
         (current + 1..current + self.num_app + 1)
             .map(|id| id % self.num_app)
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
@@ -134,7 +137,7 @@ impl TaskManager {
             }
             // go back to user mode
         } else {
-            println!("All applications completed!");
+            println!("All applications completed in {}!",get_time_ms() as isize);
             shutdown(false);
         }
     }
