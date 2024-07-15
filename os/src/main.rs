@@ -1,6 +1,12 @@
 #![no_std]
 #![no_main]
+#![feature(alloc_error_handler)]
 // #![feature(panic_info_message)]
+
+extern crate alloc;
+
+#[macro_use]
+extern crate bitflags;
 
 #[path = "boards/qemu.rs"]
 mod board;
@@ -10,6 +16,7 @@ mod console;
 mod config;
 mod lang_items;
 mod loader;
+mod mm;
 mod sbi;
 mod sync;
 pub mod syscall;
@@ -25,9 +32,12 @@ global_asm!(include_str!("link_app.S"));
 #[no_mangle]
 pub fn rust_main() -> ! {
     clear_bss();
-    println!("Helo World");
+    println!("[Kernel]Helo World");
+    mm::init();//构建堆，物理页管理，启动第一个mem_set(基本上是恒等映射)
+    println!("[Kernel]back to world");
+    mm::remap_test();
     trap::init();
-    loader::load_apps();
+    // trap::enable_interrupt();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::run_first_task();

@@ -15,14 +15,16 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
-use crate::loader::{get_num_app, init_app_cx};
+// use crate::config::MAX_APP_NUM;
+use crate::loader::{get_num_app, get_app_data};
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
+use crate::trap::TrapContext;
+use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
-use crate::timer::get_time_ms;
+// use crate::timer::get_time_ms;
 
 pub use context::TaskContext;
 
@@ -45,7 +47,7 @@ pub struct TaskManager {
 /// Inner of Task Manager
 pub struct TaskManagerInner {
     /// task list
-    tasks: [TaskControlBlock; MAX_APP_NUM],
+    tasks: Vec<TaskControlBlock>,//有了heap之后能用vec了
     /// id of current `Running` task
     current_task: usize,
 }
@@ -53,14 +55,12 @@ pub struct TaskManagerInner {
 lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
+        println!("init TASK_MANAGER");
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
-        for (i, task) in tasks.iter_mut().enumerate() {
-            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
+        println!("num_app = {}", num_app);
+        let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        for i in 0..num_app { //task initialization
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
         TaskManager {
             num_app,
@@ -75,21 +75,16 @@ lazy_static! {
 }
 
 impl TaskManager {
-    /// Run the first task in task list.
-    ///
-    /// Generally, the first task in task list is an idle task (we call it zero process later).
-    /// But in ch3, we load apps statically, so the first task is a real app.
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
-        let task0 = &mut inner.tasks[0];
-        task0.task_status = TaskStatus::Running;
-        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+        let next_task = &mut inner.tasks[0];
+        next_task.task_status = TaskStatus::Running;
+        let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
-        println!("s {}", get_time_ms() as isize);
         // before this, we should drop local variables that must be dropped manually
         unsafe {
-            __switch(&mut _unused as *mut TaskContext, next_task_cx_ptr);
+            __switch(&mut _unused as *mut _, next_task_cx_ptr);
         }
         panic!("unreachable in run_first_task!");
     }
@@ -137,10 +132,26 @@ impl TaskManager {
             }
             // go back to user mode
         } else {
-            println!("All applications completed in {}!",get_time_ms() as isize);
+            println!("All applications completed!");
             shutdown(false);
         }
     }
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_user_token()
+    }
+
+    /// Get the current 'Running' task's trap contexts.
+    fn get_current_trap_cx(&self) -> &'static mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_trap_cx()
+    }
+    pub fn change_current_program_brk(&self, size: i32) -> Option<usize> {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].change_program_brk(size)
+    }
+
 }
 
 /// run first task
@@ -173,4 +184,16 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+pub fn current_user_token()-> usize{
+    TASK_MANAGER.get_current_token()
+}
+
+pub fn current_trap_cx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_cx()
+}
+
+pub fn change_program_brk(size: i32) -> Option<usize> {
+    TASK_MANAGER.change_current_program_brk(size)
 }

@@ -15,5 +15,5 @@ pub fn get_time_ms() -> usize{ //app's runtime in ms
 
 pub fn set_next_trigger() { //set mtimecmp, time interrupt per 10 ms
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC );
-    println!("{}",get_time_ms() as isize);
+    //debug println!("{}",get_time_ms() as isize);
 }

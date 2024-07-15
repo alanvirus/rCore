@@ -10,7 +10,7 @@ mod syscall;
 #[no_mangle]
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
-    clear_bss();
+    // clear_bss();
     exit(main());
     panic!("unreachable after sys_exit!");
 }
@@ -21,16 +21,17 @@ fn main() -> i32 {
     panic!("Cannot find main!");
 }
 
-//清零bss区
-fn clear_bss() {
-    extern "C" {
-        fn start_bss();
-        fn end_bss();
-    }
-    (start_bss as usize..end_bss as usize).for_each(|addr| unsafe {
-        (addr as *mut u8).write_volatile(0);
-    });
-}
+//引入内存管理后无需清零bss？
+// //清零bss区
+// fn clear_bss() {
+//     extern "C" {
+//         fn start_bss();
+//         fn end_bss();
+//     }
+//     (start_bss as usize..end_bss as usize).for_each(|addr| unsafe {
+//         (addr as *mut u8).write_volatile(0);
+//     });
+// }
 
 //接口更名，更像linux
 use syscall::*;
@@ -46,4 +47,8 @@ pub fn yield_() -> isize {
 } 
 pub fn get_time() -> isize{
     sys_get_time()
+}
+
+pub fn sbrk(size: i32) -> isize {
+    sys_sbrk(size)
 }

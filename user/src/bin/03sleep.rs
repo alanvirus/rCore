@@ -5,14 +5,14 @@
 extern crate user_lib;
 
 use user_lib::{get_time, yield_};
-
+//ch4
 #[no_mangle]
 fn main() -> i32 {
     let current_timer = get_time();
-    let wait_for = current_timer + 100;
+    let wait_for = current_timer + 3000;
     while get_time() < wait_for {
         yield_();
     }
-    println!("Test sleep OK2!");
+    println!("Test sleep OK!");
     0
 }
