@@ -70,7 +70,7 @@ impl From<PhysPageNum> for usize {
         v.0
     }
 }
-impl From<VirtAddr> for usize {
+impl From<VirtAddr> for usize {//63:39位必须和38位相等，否则sv39模式下mmu认为非法
     fn from(v: VirtAddr) -> Self {
         if v.0 >= (1 << (VA_WIDTH_SV39 - 1)) {
             v.0 | (!((1 << VA_WIDTH_SV39) - 1))

@@ -35,7 +35,7 @@ pub fn rust_main() -> ! {
     println!("[Kernel]Helo World");
     mm::init();//构建堆，物理页管理，启动第一个mem_set(基本上是恒等映射)
     println!("[Kernel]back to world");
-    mm::remap_test();
+    mm::remap_test();//理论上如果页表未正确设置程序会直接崩掉，这个test用于检查perm
     trap::init();
     // trap::enable_interrupt();
     trap::enable_timer_interrupt();

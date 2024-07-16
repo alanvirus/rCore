@@ -90,7 +90,7 @@ impl PageTable {
         }
         result //有可能尚未创建
     }
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {//这里看起来是通过软件方式实现的，而mmu会通过硬件实现这个过程?
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
