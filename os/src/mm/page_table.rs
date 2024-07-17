@@ -1,7 +1,10 @@
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use riscv::addr::page;
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -90,7 +93,8 @@ impl PageTable {
         }
         result //有可能尚未创建
     }
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {//这里看起来是通过软件方式实现的，而mmu会通过硬件实现这个过程?
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        //这里看起来是通过软件方式实现的，而mmu会通过硬件实现这个过程?
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -107,31 +111,41 @@ impl PageTable {
         }
         result
     }
-    #[allow(unused)]//the func is capable of mapping a vpn to a specified ppn while carrying specific flags, but this feature is only utilized in trampoline
-    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) { //给vpn map一个 ppn with flags
+    #[allow(unused)] //the func is capable of mapping a vpn to a specified ppn while carrying specific flags, but this feature is only utilized in trampoline
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
+        //给vpn map一个 ppn with flags
         let pte = self.find_pte_create(vpn).unwrap();
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
     }
     #[allow(unused)]
-    pub fn unmap(&mut self, vpn: VirtPageNum) { //解绑的时候并不会影响frame_allocator和
+    pub fn unmap(&mut self, vpn: VirtPageNum) {
+        //解绑的时候并不会影响frame_allocator和
         let pte = self.find_pte(vpn).unwrap();
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);
         *pte = PageTableEntry::empty();
     }
-    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>{
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn).map(|pte| *pte)
+    }
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.find_pte(va.clone().floor()).map(|pte| {
+            let aligned_pa: PhysAddr = pte.ppn().into();
+            let offset = va.page_offset();
+            let aligned_pa_usize: usize = aligned_pa.into();
+            (aligned_pa_usize + offset).into()
+        })
     }
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
 }
 //将satp对应页表构造的虚存中一块连续内存映射到真实物理内存中的多个块
-pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize)-> Vec<&'static mut [u8]> {
+pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
-    let mut v =Vec::new();
+    let mut v = Vec::new();
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
@@ -139,7 +153,8 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize)-> Vec<&'
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
-        if end_va.page_offset() == 0 {//还没有到最后一块
+        if end_va.page_offset() == 0 {
+            //还没有到最后一块
             v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
         } else {
             v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
@@ -147,4 +162,30 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize)-> Vec<&'
         start = end_va.into();
     }
     v
+}
+pub fn translated_str(token: usize, ptr: *const u8) -> String {
+    let page_table = PageTable::from_token(token);
+    let mut va = ptr as usize;
+    let mut string = String::new();
+    loop {
+        let ch: u8 = *(page_table
+            .translate_va(VirtAddr::from(va))
+            .unwrap()
+            .get_mut());
+        if ch == 0 {
+            break;
+        } else {
+            va += 1;
+            string.push(ch as char);
+        }
+    }
+    string
+}
+pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    let page_table = PageTable::from_token(token);
+    let va = ptr as usize;
+    page_table
+        .translate_va(VirtAddr::from(va))
+        .unwrap()
+        .get_mut()
 }

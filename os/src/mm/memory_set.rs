@@ -1,7 +1,7 @@
 use super::{frame_alloc, FrameTracker};
+use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
-use super::{PTEFlags, PageTable, PageTableEntry};
 use crate::config::{MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE};
 use crate::sync::UPSafeCell;
 use alloc::collections::BTreeMap;
@@ -46,6 +46,7 @@ impl MemorySet {
     }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
+        //增添区域，映射到新建空白内存
         &mut self,
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -56,7 +57,20 @@ impl MemorySet {
             None,
         );
     }
+    pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
+        //删除区域，自动释放内存frame
+        if let Some((idx, area)) = self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_, area)| area.vpn_range.get_start() == start_vpn)
+        {
+            area.unmap(&mut self.page_table);
+            self.areas.remove(idx);
+        }
+    }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
+        //增添区域，映射到新建空白内存
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             map_area.copy_data(&self.page_table, data);
@@ -150,7 +164,7 @@ impl MemorySet {
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
-    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {//it's a trap, the life,once you lost your concentration and got stucked in, you can never get out.The harder you try, the deeper you are trapped.
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
         // map trampoline
         memory_set.map_trampoline();
@@ -226,6 +240,22 @@ impl MemorySet {
             elf.header.pt2.entry_point() as usize,
         )
     }
+    pub fn from_existed_user(user_space: &Self) -> Self {//创建一个一模一样的虚拟空间，并且连内部的内容都一样
+        let mut memory_set = Self::new_bare();
+        memory_set.map_trampoline();
+        for area in user_space.areas.iter() {
+            let new_area = MapArea::from_another(area);
+            memory_set.push(new_area, None);
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                dst_ppn
+                    .get_bytes_array()
+                    .copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
+        memory_set
+    }
     pub fn activate(&self) {
         let satp = self.page_table.token();
         unsafe {
@@ -273,19 +303,28 @@ pub struct MapArea {
 }
 
 impl MapArea {
-    pub fn new(//new一块虚拟内存，但是没有映射到物理内存
+    pub fn new(
+        //new一块虚拟内存，但是没有映射到物理内存
         start_va: VirtAddr,
         end_va: VirtAddr,
         map_type: MapType,
         map_perm: MapPermission,
     ) -> Self {
         let start_vpn: VirtPageNum = start_va.floor();
-        let end_vpn: VirtPageNum = end_va.ceil();//ceil是出于左闭右开的设计
+        let end_vpn: VirtPageNum = end_va.ceil(); //ceil是出于左闭右开的设计
         Self {
             vpn_range: VPNRange::new(start_vpn, end_vpn),
             data_frames: BTreeMap::new(),
             map_type,
             map_perm,
+        }
+    }
+    pub fn from_another(another: &Self) -> Self {
+        Self {
+            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: another.map_type,
+            map_perm: another.map_perm,
         }
     }
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -295,18 +334,18 @@ impl MapArea {
                 ppn = PhysPageNum(vpn.0);
             }
             MapType::Framed => {
-                let frame = frame_alloc().unwrap();//这里只能让vpn关联新分配frame的ppn，不能关联已存在frame的ppn
+                let frame = frame_alloc().unwrap(); //这里只能让vpn关联新分配frame的ppn，不能关联已存在frame的ppn
                 ppn = frame.ppn;
                 self.data_frames.insert(vpn, frame);
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
-        page_table.map(vpn, ppn, pte_flags);//先分配后入表
+        page_table.map(vpn, ppn, pte_flags); //先分配后入表
     }
     #[allow(unused)]
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
-            self.data_frames.remove(&vpn);//这里应该是drop了
+            self.data_frames.remove(&vpn); //这里应该是drop了
         }
         page_table.unmap(vpn);
     }
@@ -345,7 +384,7 @@ impl MapArea {
         loop {
             let src = &data[start..len.min(start + PAGE_SIZE)];
             let dst = &mut page_table
-                .translate(current_vpn)//为啥不直接用Map,
+                .translate(current_vpn) //为啥不直接用Map,
                 .unwrap()
                 .ppn()
                 .get_bytes_array()[..src.len()];
