@@ -3,9 +3,7 @@ mod context;
 use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
 use crate::syscall::syscall;
 use crate::task::{
-    current_trap_cx, current_user_token,
-    exit_current_and_run_next, 
-    suspend_current_and_run_next,
+    current_trap_cx, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
 };
 use crate::timer::set_next_trigger;
 use core::arch::{asm, global_asm};
@@ -15,13 +13,14 @@ use riscv::register::{
     sie, stval, stvec,
 };
 
-global_asm!(include_str!("trap.S")); 
+global_asm!(include_str!("trap.S"));
 
 pub fn init() {
     set_kernel_trap_entry();
 }
 
-fn set_kernel_trap_entry() { //现在在S态stvec不存系统调用入口了
+fn set_kernel_trap_entry() {
+    //现在在S态stvec不存系统调用入口了
     unsafe {
         stvec::write(trap_from_kernel as usize, TrapMode::Direct);
     }
@@ -42,24 +41,33 @@ pub fn enable_timer_interrupt() {
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
-    let cx = current_trap_cx();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
+            let mut cx = current_trap_cx();
             cx.sepc += 4;
-            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+            let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]);
+            cx = current_trap_cx();//syscall may change current_trap_cx
+            cx.x[10] = result as usize;
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::InstructionFault)
+        | Trap::Exception(Exception::InstructionPageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
-            exit_current_and_run_next();
+            println!(
+                "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                scause.cause(),
+                stval,
+                current_trap_cx().sepc,
+            );
+            exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
-            exit_current_and_run_next();
+            exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
@@ -77,9 +85,6 @@ pub fn trap_handler() -> ! {
 }
 
 #[no_mangle]
-/// set the new addr of __restore asm function in TRAMPOLINE page,
-/// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
-/// finally, jump to new addr of __restore asm function
 pub fn trap_return() -> ! {
     set_user_trap_entry();
     let trap_cx_ptr = TRAP_CONTEXT;

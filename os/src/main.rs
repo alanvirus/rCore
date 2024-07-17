@@ -16,9 +16,9 @@ mod console;
 mod config;
 mod lang_items;
 mod loader;
-mod mm;
+pub mod mm;
 mod sbi;
-mod sync;
+pub mod sync;
 pub mod syscall;
 pub mod task;
 mod timer;
@@ -35,12 +35,14 @@ pub fn rust_main() -> ! {
     println!("[Kernel]Helo World");
     mm::init();
     mm::remap_test();
-    
+    task::add_initproc();
+    println!("after initproc!");
     trap::init();
     // trap::enable_interrupt();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
-    task::run_first_task();
+    loader::list_apps();
+    task::run_tasks();
     panic!("Unreachable in rust_main!");
 }
 

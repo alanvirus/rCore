@@ -1,10 +1,8 @@
 use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
-use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-use riscv::addr::page;
 
 bitflags! {
     pub struct PTEFlags: u8 {

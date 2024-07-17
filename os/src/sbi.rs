@@ -1,9 +1,16 @@
+#![allow(unused)]
+
 pub fn console_putchar(c: usize) {
     #[allow(deprecated)]
     sbi_rt::legacy::console_putchar(c);
 }
 
-pub fn shutdown(failure: bool) -> !{
+pub fn console_getchar() -> usize {
+    #[allow(deprecated)]
+    sbi_rt::legacy::console_getchar()
+}
+
+pub fn shutdown(failure: bool) -> ! {
     use sbi_rt::{system_reset, NoReason, Shutdown, SystemFailure};
     if !failure {
         system_reset(Shutdown, NoReason);
@@ -13,6 +20,6 @@ pub fn shutdown(failure: bool) -> !{
     unreachable!()
 }
 
-pub fn set_timer(timer: usize){
+pub fn set_timer(timer: usize) {
     sbi_rt::set_timer(timer as _);
 }

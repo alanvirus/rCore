@@ -292,6 +292,10 @@ impl MemorySet {
             false
         }
     }
+    pub fn recycle_data_pages(&mut self) {
+        //*self = Self::new_bare();
+        self.areas.clear();
+    }
 }
 
 /// map area structure, controls a contiguous piece of virtual memory
