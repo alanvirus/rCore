@@ -7,7 +7,7 @@ mod switch;
 mod task;
 
 use crate::fs::OpenFlags;
-use crate::{fs::open_file, loader::get_app_data_by_name};
+use crate::fs::open_file;
 use crate::sbi::shutdown;
 use alloc::sync::Arc;
 use lazy_static::*;

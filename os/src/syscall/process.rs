@@ -1,5 +1,4 @@
 use crate::fs::{open_file, OpenFlags};
-use crate::loader::get_app_data_by_name;
 use crate::mm::{translated_refmut, translated_str};
 use crate::task::{
     add_task, change_program_brk, current_task, current_user_token, exit_current_and_run_next,
