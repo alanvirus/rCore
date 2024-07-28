@@ -17,7 +17,6 @@ mod config;
 mod drivers;
 pub mod fs;
 pub mod lang_items;
-mod loader;
 pub mod mm;
 pub mod sbi;
 pub mod sync;
