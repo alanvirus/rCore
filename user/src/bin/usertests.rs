@@ -9,6 +9,8 @@ extern crate user_lib;
 
 // item of TESTS : app_name(argv_0), argv_1, argv_2, argv_3, exit_code
 static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
+    ("filetest_simple\0", "\0", "\0", "\0", 0),
+    ("cat_filea\0", "\0", "\0", "\0", 0),
     ("exit\0", "\0", "\0", "\0", 0),
     ("fantastic_text\0", "\0", "\0", "\0", 0),
     ("forktest_simple\0", "\0", "\0", "\0", 0),
@@ -16,6 +18,7 @@ static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
     ("forktest2\0", "\0", "\0", "\0", 0),
     ("forktree\0", "\0", "\0", "\0", 0),
     ("hello_world\0", "\0", "\0", "\0", 0),
+    ("huge_write\0", "\0", "\0", "\0", 0),
     ("matrix\0", "\0", "\0", "\0", 0),
     ("sleep_simple\0", "\0", "\0", "\0", 0),
     ("sleep\0", "\0", "\0", "\0", 0),
@@ -102,7 +105,7 @@ pub fn main() -> i32 {
     }
     if err_num != FAIL_TESTS.len() as i32 {
         println!(
-            "all failed app_num is  {} , but only 2 passed {}",
+            "all failed app_num is  {} , but only  passed {}",
             FAIL_TESTS.len(),
             err_num
         );

@@ -29,7 +29,9 @@ lazy_static! {
     pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
         Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
 }
-
+pub fn kernel_token() -> usize {
+    KERNEL_SPACE.exclusive_access().token()
+}
 pub struct MemorySet {
     page_table: PageTable,
     areas: Vec<MapArea>,
@@ -44,9 +46,8 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
-    /// Assume that no conflicts.
+    /// Assume that no conflicts. if there exist conflicts， won't os panic while building pagetable?
     pub fn insert_framed_area(
-        //增添区域，映射到新建空白内存
         &mut self,
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -58,7 +59,6 @@ impl MemorySet {
         );
     }
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
-        //删除区域，自动释放内存frame
         if let Some((idx, area)) = self
             .areas
             .iter_mut()
@@ -70,7 +70,6 @@ impl MemorySet {
         }
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
-        //增添区域，映射到新建空白内存
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             map_area.copy_data(&self.page_table, data);
@@ -88,9 +87,7 @@ impl MemorySet {
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
-        // map trampoline
         memory_set.map_trampoline();
-        // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
@@ -240,7 +237,8 @@ impl MemorySet {
             elf.header.pt2.entry_point() as usize,
         )
     }
-    pub fn from_existed_user(user_space: &Self) -> Self {//创建一个一模一样的虚拟空间，并且连内部的内容都一样
+    pub fn from_existed_user(user_space: &Self) -> Self {
+        //创建一个一模一样的虚拟空间，并且连内部的内容都一样
         let mut memory_set = Self::new_bare();
         memory_set.map_trampoline();
         for area in user_space.areas.iter() {

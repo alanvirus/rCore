@@ -132,6 +132,9 @@ impl PhysAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+    pub fn get_ref<T>(&self) -> &'static T {
+        unsafe { (self.0 as *const T).as_ref().unwrap() }
+    }
     pub fn get_mut<T>(&self) -> &'static mut T {
         unsafe { (self.0 as *mut T).as_mut().unwrap() }
     }
@@ -178,8 +181,12 @@ impl PhysPageNum {
 pub trait StepByOne{
     fn step(&mut self);
 }
-
 impl StepByOne for VirtPageNum {
+    fn step(&mut self){
+        self.0 += 1;
+    }
+}
+impl StepByOne for PhysPageNum {
     fn step(&mut self){
         self.0 += 1;
     }
