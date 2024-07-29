@@ -1,11 +1,13 @@
 use crate::fs::{open_file, OpenFlags};
-use crate::mm::{translated_refmut, translated_str};
+use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, change_program_brk, current_task, current_user_token, exit_current_and_run_next,
-    suspend_current_and_run_next,
+    suspend_current_and_run_next, SignalAction, SignalFlags, MAX_SIG,
 };
 use crate::timer::get_time_ms;
+use alloc::string::String;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
