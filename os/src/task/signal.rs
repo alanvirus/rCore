@@ -1,6 +1,6 @@
 use bitflags::*;
 
-pub const MAX_SIG: usize = 31;
+pub const MAX_SIG: usize=31;
 
 bitflags! {
     pub struct SignalFlags: u32 {
@@ -38,6 +38,7 @@ bitflags! {
         const SIGSYS = 1 << 31;
     }
 }
+
 impl SignalFlags {
     pub fn check_error(&self) -> Option<(i32, &'static str)> {
         if self.contains(Self::SIGINT) {
