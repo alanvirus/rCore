@@ -159,7 +159,7 @@ impl MemorySet {
         }
         memory_set
     }
-    /// Include sections in elf and trampoline and TrapContext and user stack,
+    /// Include sections in elf and trampoline and (TrapContext and user stack)这两个在创建线程时分配
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
@@ -198,42 +198,12 @@ impl MemorySet {
         }
         // map user stack with U flags
         let max_end_va: VirtAddr = max_end_vpn.into();
-        let mut user_stack_bottom: usize = max_end_va.into();
+        let mut user_stack_base: usize = max_end_va.into();
         // guard page
-        user_stack_bottom += PAGE_SIZE;
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
-        memory_set.push(
-            MapArea::new(
-                user_stack_bottom.into(),
-                user_stack_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            ),
-            None,
-        );
-        // used in sbrk
-        memory_set.push(
-            MapArea::new(
-                user_stack_top.into(),
-                user_stack_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            ),
-            None,
-        );
-        // map TrapContext
-        memory_set.push(
-            MapArea::new(
-                TRAP_CONTEXT.into(),
-                TRAMPOLINE.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W,
-            ),
-            None,
-        );
+        user_stack_base += PAGE_SIZE;
         (
             memory_set,
-            user_stack_top,
+            user_stack_base,
             elf.header.pt2.entry_point() as usize,
         )
     }
