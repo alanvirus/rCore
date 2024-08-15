@@ -1,6 +1,6 @@
 use bitflags::*;
 
-pub const MAX_SIG: usize=31;
+pub const MAX_SIG: usize = 31;
 
 bitflags! {
     pub struct SignalFlags: u32 {

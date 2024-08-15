@@ -21,7 +21,7 @@ pub fn main() -> i32 {
         panic!("Sigaction failed!");
     }
     println!("signal_simple: kill");
-    if kill(getpid() as usize, SIGUSR1) < 0 {//kill自己，一种同步信号机制
+    if kill(getpid() as usize, SIGUSR1) < 0 {
         println!("Kill failed!");
         exit(1);
     }

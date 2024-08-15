@@ -22,7 +22,7 @@ pub fn main() -> i32 {
         if sigaction(SIGUSR1, Some(&new), Some(&mut old)) < 0 {
             panic!("Sigaction failed!");
         }
-        sleep(10000);
+        sleep(1000);
         println!("signal_simple2: child done");
         exit(0);
     } else if pid > 0 {

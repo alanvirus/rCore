@@ -27,6 +27,7 @@ impl Pipe {
         }
     }
 }
+
 const RING_BUFFER_SIZE: usize = 32;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -86,10 +87,8 @@ impl PipeRingBuffer {
     pub fn available_write(&self) -> usize {
         if self.status == RingBufferStatus::Full {
             0
-        } else if self.tail < self.head {
-            self.head - self.tail
         } else {
-            self.head + RING_BUFFER_SIZE - self.tail
+            RING_BUFFER_SIZE - self.available_read()
         }
     }
     pub fn all_write_ends_closed(&self) -> bool {
@@ -97,6 +96,7 @@ impl PipeRingBuffer {
     }
 }
 
+/// Return (read_end, write_end)
 pub fn make_pipe() -> (Arc<Pipe>, Arc<Pipe>) {
     let buffer = Arc::new(unsafe { UPSafeCell::new(PipeRingBuffer::new()) });
     let read_end = Arc::new(Pipe::read_end_with_buffer(buffer.clone()));
@@ -104,6 +104,7 @@ pub fn make_pipe() -> (Arc<Pipe>, Arc<Pipe>) {
     buffer.exclusive_access().set_write_end(&write_end);
     (read_end, write_end)
 }
+
 impl File for Pipe {
     fn readable(&self) -> bool {
         self.readable
@@ -136,7 +137,7 @@ impl File for Pipe {
                     if already_read == want_to_read {
                         return want_to_read;
                     }
-                } else {//看起来永远不会到达这里
+                } else {
                     return already_read;
                 }
             }
@@ -155,6 +156,7 @@ impl File for Pipe {
                 suspend_current_and_run_next();
                 continue;
             }
+            // write at most loop_write bytes
             for _ in 0..loop_write {
                 if let Some(byte_ref) = buf_iter.next() {
                     ring_buffer.write_byte(unsafe { *byte_ref });

@@ -1,5 +1,6 @@
 use crate::task::{SignalFlags, MAX_SIG};
 
+/// Action for a signal
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy)]
 pub struct SignalAction {
