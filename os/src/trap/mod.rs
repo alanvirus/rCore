@@ -1,12 +1,12 @@
 mod context;
 
-use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
+use crate::config::TRAMPOLINE;
 use crate::syscall::syscall;
 use crate::task::{
-    check_signals_error_of_current, current_add_signal, current_trap_cx, current_user_token,
-    exit_current_and_run_next, handle_signals, suspend_current_and_run_next, SignalFlags,
+    check_signals_of_current, current_add_signal, current_trap_cx, current_trap_cx_user_va,
+    current_user_token, exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,
 };
-use crate::timer::set_next_trigger;
+use crate::timer::{check_timer, set_next_trigger};
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -21,7 +21,6 @@ pub fn init() {
 }
 
 fn set_kernel_trap_entry() {
-    //现在在S态stvec不存系统调用入口了
     unsafe {
         stvec::write(trap_from_kernel as usize, TrapMode::Direct);
     }
@@ -71,6 +70,7 @@ pub fn trap_handler() -> ! {
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
+            check_timer();
             suspend_current_and_run_next();
         }
         _ => {
@@ -83,10 +83,10 @@ pub fn trap_handler() -> ! {
     }
     // handle signals (handle the sent signal)
     //println!("[K] trap_handler:: handle_signals");
-    handle_signals();
+    // handle_signals();
 
     // check error signals (if error then exit)
-    if let Some((errno, msg)) = check_signals_error_of_current() {
+    if let Some((errno, msg)) = check_signals_of_current() {
         println!("[kernel] {}", msg);
         exit_current_and_run_next(errno);
     }
@@ -96,7 +96,7 @@ pub fn trap_handler() -> ! {
 #[no_mangle]
 pub fn trap_return() -> ! {
     set_user_trap_entry();
-    let trap_cx_ptr = TRAP_CONTEXT;
+    let trap_cx_user_va = current_trap_cx_user_va();
     let user_satp = current_user_token();
     extern "C" {
         fn __alltraps();
@@ -108,7 +108,7 @@ pub fn trap_return() -> ! {
             "fence.i",
             "jr {restore_va}",             // jump to new addr of __restore asm function
             restore_va = in(reg) restore_va,
-            in("a0") trap_cx_ptr,      // a0 = virt addr of Trap Context
+            in("a0") trap_cx_user_va,      // a0 = virt addr of Trap Context
             in("a1") user_satp,        // a1 = phy addr of usr page table
             options(noreturn)
         );

@@ -1,3 +1,4 @@
+use super::action::SignalActions;
 use super::id::RecycleAllocator;
 use super::manager::insert_into_pid2process;
 use super::TaskControlBlock;
@@ -31,16 +32,12 @@ pub struct ProcessControlBlockInner {
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 
     pub signals: SignalFlags,
-    // pub signal_mask: SignalFlags,
-    // // the signal which is being handling
-    // pub handling_sig: isize,
-    // // Signal actions
-    // pub signal_actions: SignalActions,
-    // // if the task is killed
-    // pub killed: bool,
-    // // if the task is frozen by a signal
-    // pub frozen: bool,
-    // pub trap_ctx_backup: Option<TrapContext>,
+    pub signal_mask: SignalFlags,
+    pub handling_sig: isize,
+    pub signal_actions: SignalActions,
+    pub killed: bool,
+    pub frozen: bool,
+    pub trap_ctx_backup: Option<TrapContext>,
     pub is_zombie: bool,
     pub tasks: Vec<Option<Arc<TaskControlBlock>>>,
     pub task_res_allocator: RecycleAllocator,
@@ -100,6 +97,12 @@ impl ProcessControlBlock {
                         Some(Arc::new(Stdout)),
                     ],
                     signals: SignalFlags::empty(),
+                    signal_mask: SignalFlags::empty(),
+                    handling_sig: -1,
+                    signal_actions: SignalActions::default(),
+                    killed: false,
+                    frozen: false,
+                    trap_ctx_backup: None,
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
                     mutex_list: Vec::new(),
@@ -115,7 +118,7 @@ impl ProcessControlBlock {
         ));
         let task_inner = task.inner_exclusive_access();
         let trap_cx = task_inner.get_trap_cx();
-        let ustack_top = task_inner.res.as_ref().unwrap().usatck_top();
+        let ustack_top = task_inner.res.as_ref().unwrap().ustack_top();
         let kstack_top = task.kstack.get_top();
         drop(task_inner);
         *trap_cx = TrapContext::app_init_context(
@@ -128,13 +131,13 @@ impl ProcessControlBlock {
         let mut process_inner = process.inner_exclusive_access();
         process_inner.tasks.push(Some(Arc::clone(&task)));
         drop(process_inner);
-        insert_into_pid2process(pid_handle, Arc::clone(&process));
+        insert_into_pid2process(process.get_pid(), Arc::clone(&process));
         add_task(task);
         process
     }
     pub fn exec(&self, elf_data: &[u8], args: Vec<String>) {
         assert_eq!(self.inner_exclusive_access().thread_count(), 1); //only support single thread
-        let (memory_set, mut ustack_base, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
         let new_token = memory_set.token();
         let mut inner = self.inner_exclusive_access();
         inner.memory_set = memory_set;
@@ -204,6 +207,12 @@ impl ProcessControlBlock {
                     exit_code: 0,
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
+                    signal_mask: SignalFlags::empty(),
+                    handling_sig: -1,
+                    signal_actions: SignalActions::default(),
+                    killed: false,
+                    frozen: false,
+                    trap_ctx_backup: None,
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
                     mutex_list: Vec::new(),
@@ -222,7 +231,7 @@ impl ProcessControlBlock {
                 .as_ref()
                 .unwrap()
                 .ustack_base(),
-            false,//已经copy过来了
+            false, //已经copy过来了
         ));
         let mut child_inner = child.inner_exclusive_access();
         child_inner.tasks.push(Some(Arc::clone(&task)));
@@ -231,7 +240,7 @@ impl ProcessControlBlock {
         let trap_cx = task_inner.get_trap_cx();
         trap_cx.kernel_sp = task.kstack.get_top();
         drop(task_inner);
-        insert_into_pid2process(child.getpid(), Arc::clone(&child));
+        insert_into_pid2process(child.get_pid(), Arc::clone(&child));
         add_task(task);
         child
     }

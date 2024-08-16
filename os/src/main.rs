@@ -15,20 +15,19 @@ mod board;
 mod console;
 mod config;
 mod drivers;
-pub mod fs;
-pub mod lang_items;
-pub mod mm;
-pub mod sbi;
-pub mod sync;
-pub mod syscall;
-pub mod task;
-pub mod timer;
-pub mod trap;
+mod fs;
+mod lang_items;
+mod mm;
+mod sbi;
+mod sync;
+mod syscall;
+mod task;
+mod timer;
+mod trap;
 
 use core::arch::global_asm;
 
 global_asm!(include_str!("entry.asm"));
-// global_asm!(include_str!("link_app.S"));
 
 #[no_mangle]
 pub fn rust_main() -> ! {

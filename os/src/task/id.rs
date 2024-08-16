@@ -166,7 +166,7 @@ impl TaskUserRes {
             .process
             .upgrade()
             .unwrap()
-            .inner_exlcusive_access()
+            .inner_exclusive_access()
             .alloc_tid();
     }
 
@@ -181,7 +181,7 @@ impl TaskUserRes {
     }
     pub fn trap_cx_ppn(&self) -> PhysPageNum {
         let process = self.process.upgrade().unwrap();
-        let mut process_inner = process.inner_exclusive_access();
+        let process_inner = process.inner_exclusive_access();
         let trap_cx_bottom_va: VirtAddr = trap_cx_bottom_from_tid(self.tid).into();
         process_inner
             .memory_set
@@ -192,7 +192,7 @@ impl TaskUserRes {
     pub fn ustack_base(&self) -> usize {
         self.ustack_base
     }
-    pub fn usatck_top(&self) -> usize {
+    pub fn ustack_top(&self) -> usize {
         ustack_bottom_from_tid(self.ustack_base, self.tid) + USER_STACK_SIZE
     }
 }

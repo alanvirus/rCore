@@ -1,8 +1,8 @@
 use crate::fs::{open_file, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
-    suspend_current_and_run_next, SignalAction, SignalFlags, MAX_SIG,change_program_brk,
+     current_process,  current_user_token, exit_current_and_run_next,
+    pid2process, suspend_current_and_run_next, SignalAction, SignalFlags, MAX_SIG,
 };
 use crate::timer::get_time_ms;
 use alloc::string::String;
@@ -24,24 +24,29 @@ pub fn sys_get_time() -> isize {
 }
 
 pub fn sys_sbrk(size: i32) -> isize {
-    if let Some(old_brk) = change_program_brk(size) {
-        old_brk as isize
-    } else {
-        -1
-    }
+    // if let Some(old_brk) = change_program_brk(size) {
+    //     old_brk as isize
+    // } else {
+    //     -1
+    // }
+    size;
+    -1
 }
 
 pub fn sys_getpid() -> isize {
-    current_task().unwrap().pid.0 as isize
+    current_process().get_pid() as isize
 }
 
 pub fn sys_fork() -> isize {
-    let current_task = current_task().unwrap();
-    let new_task = current_task.fork();
-    let new_pid = new_task.pid.0;
-    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
-    trap_cx.x[10] = 0; //why not do this in fork()?
-    add_task(new_task);
+    let current_process = current_process();
+    let new_process = current_process.fork();
+    let new_pid = new_process.get_pid();
+    let trap_cx = new_process.inner_exclusive_access().tasks[0]
+        .as_ref()
+        .unwrap()
+        .inner_exclusive_access()
+        .get_trap_cx();
+    trap_cx.x[10] = 0;
     new_pid as isize
 }
 
@@ -61,9 +66,9 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     }
     if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
         let all_data = app_inode.read_all();
-        let task = current_task().unwrap();
+        let process = current_process();
         let argc = args_vec.len();
-        task.exec(all_data.as_slice(), args_vec);
+        process.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize
     } else {
@@ -73,8 +78,8 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
 
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     //if pid is a zombie, release it and write its exit_code in exit_code_ptr (virtaddr)
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
     if !inner
         .children
         .iter()
@@ -83,7 +88,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         return -1;
     }
     let pair = inner.children.iter().enumerate().find(|(_, p)| {
-        p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.get_pid())
+        p.inner_exclusive_access().is_zombie && (pid == -1 || pid as usize == p.get_pid())
     });
     if let Some((idx, _)) = pair {
         let child = inner.children.remove(idx);
@@ -98,14 +103,13 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signum: i32) -> isize {
-    if let Some(task) = pid2task(pid) {
+    if let Some(process) = pid2process(pid) {
         if let Some(flag) = SignalFlags::from_bits(1 << signum) {
-            // insert the signal if legal
-            let mut task_ref = task.inner_exclusive_access();
-            if task_ref.signals.contains(flag) {
-                return -1;
-            }
-            task_ref.signals.insert(flag);
+            let mut process_ref = process.inner_exclusive_access();
+            // if process_ref.signals.contains(flag) {
+            //     return -1;
+            // }
+            process_ref.signals |= flag;
             0
         } else {
             -1
@@ -116,34 +120,28 @@ pub fn sys_kill(pid: usize, signum: i32) -> isize {
 }
 
 pub fn sys_sigprocmask(mask: u32) -> isize {
-    if let Some(task) = current_task() {
-        let mut inner = task.inner_exclusive_access();
-        let old_mask = inner.signal_mask;
-        if let Some(flag) = SignalFlags::from_bits(mask) {
-            inner.signal_mask = flag;
-            old_mask.bits() as isize
-        } else {
-            -1
-        }
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
+    let old_mask = inner.signal_mask;
+    if let Some(flag) = SignalFlags::from_bits(mask) {
+        inner.signal_mask = flag;
+        old_mask.bits() as isize
     } else {
         -1
     }
 }
 
 pub fn sys_sigreturn() -> isize {
-    if let Some(task) = current_task() {
-        let mut inner = task.inner_exclusive_access();
+    let process = current_process();
+        let mut inner = process.inner_exclusive_access();
         inner.handling_sig = -1;
         // restore the trap context
-        let trap_ctx = inner.get_trap_cx();
+        let trap_ctx = inner.get_task(0).inner_exclusive_access().get_trap_cx();
         *trap_ctx = inner.trap_ctx_backup.unwrap();
         // Here we return the value of a0 in the trap_ctx,
         // otherwise it will be overwritten after we trap
         // back to the original execution of the application.
         trap_ctx.x[10] as isize
-    } else {
-        -1
-    }
 }
 
 fn check_sigaction_error(signal: SignalFlags, action: usize, old_action: usize) -> bool {
@@ -164,8 +162,8 @@ pub fn sys_sigaction(
     old_action: *mut SignalAction,
 ) -> isize {
     let token = current_user_token();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
     if signum as usize > MAX_SIG {
         return -1;
     }

@@ -65,8 +65,7 @@ pub fn current_process() -> Arc<ProcessControlBlock> {
 // }
 pub fn current_user_token() -> usize {
     let task = current_task().unwrap();
-    let token = task.inner_exclusive_access().get_user_token();
-    token
+    task.get_user_token()
 }
 pub fn current_trap_cx() -> &'static mut TrapContext {
     current_task()
@@ -74,7 +73,7 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .inner_exclusive_access()
         .get_trap_cx()
 }
-pub fn current_trap_cx_user_va() -> &'static mut TrapContext {
+pub fn current_trap_cx_user_va() -> usize {
     current_task()
         .unwrap()
         .inner_exclusive_access()
