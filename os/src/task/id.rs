@@ -145,7 +145,7 @@ impl TaskUserRes {
         process_inner.memory_set.insert_framed_area(
             trap_cx_bottom.into(),
             trap_cx_top.into(),
-            MapPermission::R | MapPermission::W | MapPermission::U,
+            MapPermission::R | MapPermission::W,
         );
     }
     pub fn dealloc_user_res(&self) {

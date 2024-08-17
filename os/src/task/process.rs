@@ -139,8 +139,7 @@ impl ProcessControlBlock {
         assert_eq!(self.inner_exclusive_access().thread_count(), 1); //only support single thread
         let (memory_set, ustack_base, entry_point) = MemorySet::from_elf(elf_data);
         let new_token = memory_set.token();
-        let mut inner = self.inner_exclusive_access();
-        inner.memory_set = memory_set;
+        self.inner_exclusive_access().memory_set = memory_set;
         let task = self.inner_exclusive_access().get_task(0);
         let mut task_inner = task.inner_exclusive_access();
         task_inner.res.as_mut().unwrap().ustack_base = ustack_base;

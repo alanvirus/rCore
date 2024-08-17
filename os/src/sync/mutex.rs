@@ -8,9 +8,11 @@ pub trait Mutex: Sync + Send {
     fn lock(&self);
     fn unlock(&self);
 }
+
 pub struct MutexSpin {
     locked: UPSafeCell<bool>,
 }
+
 impl MutexSpin {
     pub fn new() -> Self {
         Self {
@@ -18,6 +20,7 @@ impl MutexSpin {
         }
     }
 }
+
 impl Mutex for MutexSpin {
     fn lock(&self) {
         loop {
@@ -32,6 +35,7 @@ impl Mutex for MutexSpin {
             }
         }
     }
+
     fn unlock(&self) {
         let mut locked = self.locked.exclusive_access();
         *locked = false;
@@ -41,10 +45,12 @@ impl Mutex for MutexSpin {
 pub struct MutexBlocking {
     inner: UPSafeCell<MutexBlockingInner>,
 }
+
 pub struct MutexBlockingInner {
     locked: bool,
     wait_queue: VecDeque<Arc<TaskControlBlock>>,
 }
+
 impl MutexBlocking {
     pub fn new() -> Self {
         Self {
@@ -57,24 +63,26 @@ impl MutexBlocking {
         }
     }
 }
+
 impl Mutex for MutexBlocking {
     fn lock(&self) {
-        let mut mutex_inner =self.inner.exclusive_access();
+        let mut mutex_inner = self.inner.exclusive_access();
         if mutex_inner.locked {
             mutex_inner.wait_queue.push_back(current_task().unwrap());
             drop(mutex_inner);
             block_current_and_run_next();
         } else {
-            mutex_inner.locked=true;
+            mutex_inner.locked = true;
         }
     }
+
     fn unlock(&self) {
-        let mut mutex_inner =self.inner.exclusive_access();
+        let mut mutex_inner = self.inner.exclusive_access();
         assert!(mutex_inner.locked);
-        if let Some(waking_task)=mutex_inner.wait_queue.pop_front() {
+        if let Some(waking_task) = mutex_inner.wait_queue.pop_front() {
             wakeup_task(waking_task);
         } else {
-            mutex_inner.locked=false;
+            mutex_inner.locked = false;
         }
     }
 }

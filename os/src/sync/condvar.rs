@@ -5,9 +5,11 @@ use alloc::{collections::VecDeque, sync::Arc};
 pub struct Condvar {
     pub inner: UPSafeCell<CondvarInner>,
 }
+
 pub struct CondvarInner {
     pub wait_queue: VecDeque<Arc<TaskControlBlock>>,
 }
+
 impl Condvar {
     pub fn new() -> Self {
         Self {

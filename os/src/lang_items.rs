@@ -7,31 +7,32 @@ use log::*;
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
-        println!(
-            "Panicked at {}:{} {}",
+        error!(
+            "[kernel] Panicked at {}:{} {}",
             location.file(),
             location.line(),
             info.message()
         );
     } else {
-        println!("Panicked: {}", info.message());
+        error!("[kernel] Panicked: {}", info.message());
     }
-    unsafe{
+    unsafe {
         backtrace();
     }
-    shutdown(true);
+    shutdown(true)
 }
-unsafe fn backtrace(){
-    let mut fp:usize;
+
+unsafe fn backtrace() {
+    let mut fp: usize;
     let stop = current_kstack_top();
-    asm!("mv {}, s0",out(reg) fp);
-    println!("---START BACKTRAVE---");
+    asm!("mv {}, s0", out(reg) fp);
+    println!("---START BACKTRACE---");
     for i in 0..10 {
-        if fp ==stop {
+        if fp == stop {
             break;
         }
-        println!("#{}:ra={:#x}",i, *((fp-8)as *const usize));
-        fp = *((fp-16) as *const usize);
+        println!("#{}:ra={:#x}", i, *((fp - 8) as *const usize));
+        fp = *((fp - 16) as *const usize);
     }
-    println!("---END BACKTRACE---");
+    println!("---END   BACKTRACE---");
 }

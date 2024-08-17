@@ -81,11 +81,7 @@ pub fn trap_handler() -> ! {
             );
         }
     }
-    // handle signals (handle the sent signal)
-    //println!("[K] trap_handler:: handle_signals");
     // handle_signals();
-
-    // check error signals (if error then exit)
     if let Some((errno, msg)) = check_signals_of_current() {
         println!("[kernel] {}", msg);
         exit_current_and_run_next(errno);
@@ -106,10 +102,10 @@ pub fn trap_return() -> ! {
     unsafe {
         asm!(
             "fence.i",
-            "jr {restore_va}",             // jump to new addr of __restore asm function
+            "jr {restore_va}",             
             restore_va = in(reg) restore_va,
-            in("a0") trap_cx_user_va,      // a0 = virt addr of Trap Context
-            in("a1") user_satp,        // a1 = phy addr of usr page table
+            in("a0") trap_cx_user_va,     
+            in("a1") user_satp,        
             options(noreturn)
         );
     }
